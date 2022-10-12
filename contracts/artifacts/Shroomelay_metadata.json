@@ -975,11 +975,11 @@
 			]
 		},
 		"contracts/shroomelay.sol": {
-			"keccak256": "0x48da7172df174c9f63351b3265bf79c9b23cbd957d166e62be9e7f9ac768642f",
+			"keccak256": "0xe6adb2acce51697f91b17c3cd74ba74536b288df4bc621a21505e03fb90ebb52",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://e157712b90c97dde00f89438fb906b0d9fa7a98fef14724f9f151485eca04ee6",
-				"dweb:/ipfs/QmWW8YVboiD2pitLueBB9BjA3Bk8C3jqtSXUeUdYDohSbP"
+				"bzz-raw://c12439ca6df4d6e27514dd25b2c5a9a1262a17f5eea96f1651ad3754c29d139c",
+				"dweb:/ipfs/QmXXi2SrxngW7fMsZyJvVR1qxeAcGjmPcvfUSpLGvRCEvQ"
 			]
 		},
 		"erc721a/contracts/ERC721A.sol": {
