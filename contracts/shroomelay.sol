@@ -37,9 +37,12 @@ contract Shroomelay is ERC721A, Ownable {
     string public uriPrefix = "";
     string public hiddenMetadataUri = "ipfs://";
 
+    uint256 public wlCost = 0.015 ether;
     uint256 public publicCost = 0.03 ether;
-    uint256 public maxSupply = 5000;
+    uint256 public maxSupply = 5555;
     uint256 public maxMintAmountPerTx = 3;
+
+    mapping (uint256 => bool) private rightLinks;
 
     bytes32 public whitelistMerkleRoot;
 
@@ -76,6 +79,59 @@ contract Shroomelay is ERC721A, Ownable {
         return keccak256(abi.encodePacked(account, allowance));
     }
 
+    // LINKING
+    function linkShroom(uint256 tokenId, bool right, bytes memory secret) public {
+        require(_exists(tokenId), "Token does not exist");
+        require(ownerOf(tokenId) == msg.sender, "You don't own this token");
+        
+        uint256 neighborId;
+        if (right) {
+            neighborId = rightNeighborId(tokenId);
+            require(neighborId != 0, "No right neighbor");
+        } else {
+            neighborId = leftNeighborId(tokenId);
+            require(neighborId != 0, "No left neighbor");
+        }
+
+        require(verify(ownerOf(neighborId), neighborId, secret), "Invalid secret!");
+        
+        if (right) {
+            rightLinks[tokenId] = true;
+        } else {
+            rightLinks[neighborId] = true;
+        }
+    }
+
+    function getEthSignedShroomHash(address _owner, uint256 _shroomId) public pure returns (bytes32) {
+        return keccak256(
+                    abi.encodePacked("\x19Ethereum Signed Message:\n32",
+                                     keccak256(abi.encodePacked(_owner, _shroomId))
+                                    )
+                );
+    }
+
+    function verify(address _signer, uint256 _shroomId, bytes memory signature) public pure returns (bool) {
+        bytes32 ethSignedShroomHash = getEthSignedShroomHash(_signer, _shroomId);
+
+        return recoverSigner(ethSignedShroomHash, signature) == _signer;
+    }
+
+    function recoverSigner(bytes32 _ethSignedShroomHash, bytes memory _signature) public pure returns (address) {
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
+
+        return ecrecover(_ethSignedShroomHash, v, r, s);
+    }
+
+    function splitSignature(bytes memory sig) public pure returns (bytes32 r, bytes32 s, uint8 v) {
+        require(sig.length == 65, "invalid signature length");
+
+        assembly {
+            r := mload(add(sig, 32))
+            s := mload(add(sig, 64))
+            v := byte(0, mload(add(sig, 96)))
+        }
+    }
+
     // MINTING FUNCTIONS
     function mint(uint256 amount) public payable mintCompliance(amount) {
         require(state == ContractMintState.PUBLIC, "Public mint is disabled");
@@ -84,7 +140,7 @@ contract Shroomelay is ERC721A, Ownable {
         _safeMint(msg.sender, amount);
     }
 
-    function mintWhiteList(uint256 amount, uint256 allowance, bytes32[] calldata proof) public mintCompliance(amount) {
+    function mintWhiteList(uint256 amount, uint256 allowance, bytes32[] calldata proof) public payable mintCompliance(amount) {
         require(
             state == ContractMintState.WHITELIST,
             "Whitelist mint is disabled"
@@ -94,6 +150,7 @@ contract Shroomelay is ERC721A, Ownable {
             "Can't mint that many"
         );
         require(_verify(_leaf(msg.sender, allowance), proof), "Invalid proof");
+        require(msg.value >= wlCost * amount, "Insufficient funds");
 
         _safeMint(msg.sender, amount);
     }
@@ -108,26 +165,28 @@ contract Shroomelay is ERC721A, Ownable {
         return _numberMinted(_minter);
     }
 
-    function leftNeighbor(uint256 _tokenId) public view returns (uint256, string memory) {
+    function leftNeighborId(uint256 _tokenId) public view returns (uint256) {
         uint256 neighborId;
-        if (_tokenId == 1) {
-            require(totalSupply() == maxSupply, "No left neighbor yet :(");
-            neighborId = maxSupply;
-        } else {
-            neighborId = _tokenId - 1;
+        if (_exists(_tokenId)) {
+            if (_tokenId == 1 && _exists(maxSupply)) { // Corner case
+                    neighborId = maxSupply;
+            } else {
+                neighborId = _tokenId - 1;
+            }
         }
-        return (neighborId, tokenURI(neighborId));
+        return neighborId;
     }
 
-    function rightNeighbor(uint256 _tokenId) public view returns (uint256, string memory) {
+    function rightNeighborId(uint256 _tokenId) public view returns (uint256) {
         uint256 neighborId;
-        require(totalSupply() > _tokenId || totalSupply() == maxSupply, "No right neighbor yet :(");
-        if (_tokenId == maxSupply) {
-            neighborId = 1;
-        } else {
-            neighborId = _tokenId + 1;
+        if (_exists(_tokenId)) {
+            if (_tokenId == maxSupply) {
+                neighborId = 1;
+            } else if (_exists(_tokenId + 1)) {
+                neighborId = _tokenId + 1;
+            }
         }
-        return (neighborId, tokenURI(neighborId));
+        return neighborId;
     }
 
     function tokenURI(uint256 _tokenId) public view virtual override returns (string memory) {
@@ -137,6 +196,18 @@ contract Shroomelay is ERC721A, Ownable {
         );
 
         string memory currentBaseURI = _baseURI();
+
+        uint256 ipfsId = _tokenId;
+        uint256 rightId = rightNeighborId(_tokenId);
+        uint256 leftId = leftNeighborId(_tokenId);
+
+        if (rightId != 0 && rightLinks[_tokenId]) {
+            ipfsId |= 0x10000;
+        }
+        
+        if (leftId != 0 && rightLinks[leftId]) {
+            ipfsId |= 0x20000;
+        }
 
         return
             bytes(currentBaseURI).length > 0
