@@ -17,11 +17,11 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
+import "node_modules/@openzeppelin/contracts/access/Ownable.sol";
+import "node_modules/@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import "node_modules/@openzeppelin/contracts/utils/Strings.sol";
 
-import "erc721a/contracts/ERC721A.sol";
+import "node_modules/erc721a/contracts/ERC721A.sol";
 
 contract Shroomelay is ERC721A, Ownable {
     using Strings for uint256;
@@ -80,7 +80,7 @@ contract Shroomelay is ERC721A, Ownable {
     }
 
     // LINKING
-    function linkShroom(uint256 tokenId, bool right, bytes memory secret) public {
+    function linkShroom(uint256 tokenId, bool right) public {
         require(_exists(tokenId), "Token does not exist");
         require(ownerOf(tokenId) == msg.sender, "You don't own this token");
         
@@ -92,43 +92,11 @@ contract Shroomelay is ERC721A, Ownable {
             neighborId = leftNeighborId(tokenId);
             require(neighborId != 0, "No left neighbor");
         }
-
-        require(verify(ownerOf(neighborId), neighborId, secret), "Invalid secret!");
         
         if (right) {
             rightLinks[tokenId] = true;
         } else {
             rightLinks[neighborId] = true;
-        }
-    }
-
-    function getEthSignedShroomHash(address _owner, uint256 _shroomId) public pure returns (bytes32) {
-        return keccak256(
-                    abi.encodePacked("\x19Ethereum Signed Message:\n32",
-                                     keccak256(abi.encodePacked(_owner, _shroomId))
-                                    )
-                );
-    }
-
-    function verify(address _signer, uint256 _shroomId, bytes memory signature) public pure returns (bool) {
-        bytes32 ethSignedShroomHash = getEthSignedShroomHash(_signer, _shroomId);
-
-        return recoverSigner(ethSignedShroomHash, signature) == _signer;
-    }
-
-    function recoverSigner(bytes32 _ethSignedShroomHash, bytes memory _signature) public pure returns (address) {
-        (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
-
-        return ecrecover(_ethSignedShroomHash, v, r, s);
-    }
-
-    function splitSignature(bytes memory sig) public pure returns (bytes32 r, bytes32 s, uint8 v) {
-        require(sig.length == 65, "invalid signature length");
-
-        assembly {
-            r := mload(add(sig, 32))
-            s := mload(add(sig, 64))
-            v := byte(0, mload(add(sig, 96)))
         }
     }
 
